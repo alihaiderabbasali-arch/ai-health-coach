@@ -4,6 +4,134 @@ from datetime import date
 # 1. Page Configuration
 st.set_page_config(page_title="AI Health Coach PRO", page_icon="👨‍⚕️", layout="centered")
 
+# 2. Professional CSS
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; }
+    .report-container { 
+        background-color: #1e2130; padding: 20px; border-radius: 15px; 
+        border-left: 5px solid #4CAF50; margin-bottom: 20px; color: white;
+    }
+    .data-line { font-size: 1.1em; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+    .value { color: #4CAF50; font-weight: bold; float: right; }
+    .red-flag {
+        background-color: rgba(255, 0, 0, 0.2); padding: 15px; 
+        border-radius: 10px; border: 2px solid #ff4b4b; margin-top: 15px;
+        color: #ff4b4b; font-weight: bold; animation: blinker 1.5s linear infinite;
+    }
+    @keyframes blinker { 50% { opacity: 0.5; } }
+    .doctor-advice { 
+        background-color: rgba(255, 204, 0, 0.1); padding: 15px; 
+        border-radius: 10px; border: 1px solid #ffcc00; margin-top: 15px; color: #ddd;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- SYSTEM MEMORY ---
+if 'daily_cal' not in st.session_state: st.session_state.daily_cal = 0
+if 'daily_pro' not in st.session_state: st.session_state.daily_pro = 0
+
+# --- SIDEBAR (Interconnected Challenge) ---
+with st.sidebar:
+    st.header("🏁 28-Day Challenge")
+    user_goal = st.selectbox("Apna Goal Chunain:", ["Weight Loss", "Weight Gain", "Muscle Building"])
+    weight_target = st.number_input("Target Weight (kg)", 1, 20, 5)
+    daily_limit = 1600 if user_goal == "Weight Loss" else 2800
+    st.markdown("---")
+    st.metric("Total Eaten Today", f"{st.session_state.daily_cal} kcal")
+    st.progress(min(st.session_state.daily_cal / daily_limit, 1.0))
+    if st.button("Reset Day"):
+        st.session_state.daily_cal = 0
+        st.session_state.daily_pro = 0
+        st.rerun()
+
+# --- MAIN APP ---
+st.title("👨‍⚕️ Global Desi Health Engine")
+st.write(f"Goal: **{user_goal}** | Challenge Day: {date.today().day % 28}")
+
+# --- THE MEGA DESI DICTIONARY ---
+# Ismein Punjabi, Urdu, Hindi aur English ke keywords ka mix hai
+food_dictionary = {
+    "paratha": {
+        "tags": ["paratha", "pratha", "porota", "parontha", "pountha", "desi ghee roti", "fried bread"],
+        "cal": 290, "pro": 6, "fat": 15, "type": "bad", 
+        "doc": "Doctor's Advice: Paratha mein saturated fats zyada hain. Challenge mein 'Sookhi Roti' behtar hai."
+    },
+    "egg": {
+        "tags": ["egg", "anda", "anday", "dim", "baida", "omelette", "amlet", "half fry", "ubla anda", "boiled egg"],
+        "cal": 78, "pro": 7, "fat": 5, "type": "good", 
+        "doc": "Senior Doctor: Anda protein ka best zariya hai. Isse muscle recovery tez hoti hai."
+    },
+    "chai": {
+        "tags": ["chai", "tea", "tea", "doodh patti", "mix chai", "karak", "pink tea", "shai", "green tea", "kahwa"],
+        "cal": 90, "pro": 2, "fat": 3, "type": "neutral", 
+        "doc": "Medical Tip: Chai mein cheeni kam rakhein. Khane ke baad gap lazmi dein."
+    },
+    "biryani": {
+        "tags": ["biryani", "briyani", "rice", "chawal", "pulao", "polao", "tahari", "mutton rice", "chicken rice"],
+        "cal": 480, "pro": 18, "fat": 22, "type": "bad", 
+        "doc": "Doctor's Warning: Biryani calories mein bohat heavy hai. Portion control ka khayal rakhein."
+    },
+    "roti": {
+        "tags": ["roti", "chapati", "phulka", "bread", "nan", "naan", "kulcha", "khamiri", "tandoori"],
+        "cal": 120, "pro": 4, "fat": 0.5, "type": "good", 
+        "doc": "Medical Note: Whole wheat roti fiber ka behtareen source hai. Weight loss ke liye behtareen."
+    },
+    "daal": {
+        "tags": ["daal", "dal", "lentils", "dhal", "tadka dal", "shorba", "chanay", "lobia"],
+        "cal": 180, "pro": 9, "fat": 2, "type": "good", 
+        "doc": "Nutritionist: Daal mein fiber aur protein dono hain. Isse pet der tak bhara rehta hai."
+    },
+    "meat": {
+        "tags": ["gosht", "meat", "mutton", "beef", "chicken", "murghi", "tikka", "karahi", "kebab", "kabab"],
+        "cal": 250, "pro": 25, "fat": 12, "type": "good", 
+        "doc": "Doctor Advice: Lean meat (chicken breast/fish) muscle building ke liye gold standard hai."
+    }
+}
+
+# User input field (Accepts anything)
+user_input = st.text_input("Aapne kya khaya? (Urdu, Hindi, Punjabi ya English mein likhein)", placeholder="Maslan: Maine 2 anday aur paratha khaya...").lower()
+
+if user_input:
+    matched_any = False
+    # Smart parsing logic
+    for item, info in food_dictionary.items():
+        if any(tag in user_input for tag in info["tags"]):
+            matched_any = True
+            st.markdown(f"""
+            <div class="report-container">
+                <h2 style="color:#4CAF50;">✅ {item.upper()} Detected</h2>
+                <div class="data-line">🔥 Calories: <span class="value">{info['cal']} kcal</span></div>
+                <div class="data-line">💪 Protein: <span class="value">{info['pro']}g</span></div>
+            """)
+            
+            # Interconnected Red Flag Logic
+            if user_goal == "Weight Loss" and info['type'] == "bad":
+                st.markdown('<div class="red-flag">🚩 RED FLAG: Yeh aapke goal ke khilaf hai! Control karein.</div>', unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div class="doctor-advice">
+                    <b style="color:#ffcc00;">👨‍⚕️ Specialist Advice:</b><br>{info['doc']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button(f"Add {item.capitalize()} to Progress"):
+                st.session_state.daily_cal += info['cal']
+                st.session_state.daily_pro += info['pro']
+                st.rerun()
+
+    if not matched_any:
+        st.info("🤖 AI is analyzing... Hum is naye desi naam ko database mein add kar rahe hain!")
+
+st.divider()
+st.caption("Developed by Abbas Ali | Multi-Language Desi Dictionary V12.0")
+import streamlit as st
+from datetime import date
+
+# 1. Page Configuration
+st.set_page_config(page_title="AI Health Coach PRO", page_icon="👨‍⚕️", layout="centered")
+
 # 2. Advanced CSS (Purana Layout + Naye Red Flags)
 st.markdown("""
     <style>
