@@ -1,172 +1,93 @@
 import streamlit as st
 from datetime import date
-import json
-import re
-from difflib import get_close_matches
 import pandas as pd
-from openai import OpenAI
+import re
 import os
 
-# ---------------- CONFIG ----------------
-st.set_page_config(page_title="AI Health Coach", layout="centered")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Gemini Health Engine", page_icon="👨‍⚕️", layout="centered")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-DATA_FILE = "health_data.json"
-
-# ---------------- LOAD/SAVE ----------------
-def load_data():
-    try:
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-            for k, v in data.items():
-                st.session_state[k] = v
-    except:
-        pass
-
-def save_data():
-    data = {
-        "daily_cal": st.session_state.daily_cal,
-        "daily_pro": st.session_state.daily_pro,
-        "history": st.session_state.history,
-        "custom_foods": st.session_state.custom_foods,
-        "chat_history": st.session_state.chat_history
+# --- CLEAN DESIGN (No Bugs) ---
+st.markdown("""
+    <style>
+    .report-card { 
+        background-color: #1e2130; padding: 20px; border-radius: 15px; 
+        border: 2px solid #4CAF50; color: white; margin-bottom: 15px;
     }
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
+    .metric-line { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 8px 0; }
+    .m-label { color: #aaa; }
+    .m-val { color: #4CAF50; font-weight: bold; }
+    .red-flag { background-color: #451313; color: #ff4b4b; padding: 10px; border-radius: 10px; text-align: center; margin-top: 10px; border: 1px solid #ff4b4b; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# ---------------- INIT ----------------
-if 'loaded' not in st.session_state:
-    load_data()
-    st.session_state.loaded = True
-
+# --- APP LOGIC & MEMORY ---
 if 'daily_cal' not in st.session_state: st.session_state.daily_cal = 0
 if 'daily_pro' not in st.session_state: st.session_state.daily_pro = 0
-if 'custom_foods' not in st.session_state: st.session_state.custom_foods = {}
-if 'history' not in st.session_state: st.session_state.history = {}
-if 'chat_history' not in st.session_state: st.session_state.chat_history = []
 
-# ---------------- SIDEBAR ----------------
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("Settings")
+    st.header("🏁 28-Day Tracker")
+    u_goal = st.selectbox("Select Goal:", ["Weight Loss", "Weight Gain", "Muscle Building"])
+    limit = 1600 if u_goal == "Weight Loss" else 2800
+    
+    st.metric("Total Calories", f"{st.session_state.daily_cal} kcal")
+    st.metric("Total Protein", f"{st.session_state.daily_pro} g")
+    st.progress(min(st.session_state.daily_cal / limit, 1.0))
+    
+    if st.button("Reset Stats"):
+        st.session_state.daily_cal, st.session_state.daily_pro = 0, 0
+        st.rerun()
 
-    weight = st.number_input("Weight (kg)", 40, 150, 70)
-    goal = st.selectbox("Goal", ["Weight Loss", "Weight Gain", "Muscle Building"])
+# --- MAIN INTERFACE ---
+st.title("👨‍⚕️ Gemini Pro Health AI")
+st.write(f"**Goal:** {u_goal} | **Challenge Day:** {date.today().day % 28}")
 
-    if goal == "Weight Loss":
-        limit = weight * 20
-    elif goal == "Weight Gain":
-        limit = weight * 35
-    else:
-        limit = weight * 30
-
-    st.metric("Calories", f"{st.session_state.daily_cal}/{int(limit)}")
-    st.metric("Protein", f"{st.session_state.daily_pro} g")
-
-# ---------------- FOOD DATABASE ----------------
+# Master Dictionary
 food_db = {
-    "chai": {"tags": ["chai", "tea"], "cal": 90, "pro": 2},
-    "paratha": {"tags": ["paratha", "pratha"], "cal": 290, "pro": 6},
-    "egg": {"tags": ["egg", "anda"], "cal": 78, "pro": 7},
-    "biryani": {"tags": ["biryani", "rice"], "cal": 480, "pro": 18},
+    "chai": {"tags": ["chai", "tea", "doodh patti"], "cal": 90, "pro": 2, "type": "neutral", "doc": "Limit sugar. Keep gap from meals."},
+    "paratha": {"tags": ["paratha", "pratha", "porota"], "cal": 290, "pro": 6, "type": "bad", "doc": "High saturated fats. Avoid in weight loss."},
+    "egg": {"tags": ["egg", "anda", "boiled egg"], "cal": 78, "pro": 7, "type": "good", "doc": "Pure protein. Best for muscle recovery."},
+    "biryani": {"tags": ["biryani", "rice", "chawal"], "cal": 480, "pro": 18, "type": "bad", "doc": "High carb/sodium. Portion control needed."}
 }
 
-food_db.update(st.session_state.custom_foods)
-
-# ---------------- MAIN ----------------
-st.title("AI Health Coach")
-
-query = st.text_input("What did you eat today?").lower()
-
-def extract_qty(food, text):
-    match = re.search(r'(\d+)\s*' + food, text)
-    return int(match.group(1)) if match else 1
+query = st.text_input("Aap ne aaj kya khaya?", placeholder="e.g. Maine 2 anday aur 1 chai pi...").lower()
 
 if query:
-    total_cal, total_pro = 0, 0
+    matched = False
+    for item, data in food_db.items():
+        if any(tag in query for tag in data["tags"]):
+            matched = True
+            
+            # Simple Quantity Extraction
+            qty_match = re.search(r'(\d+)', query)
+            qty = int(qty_match.group(1)) if qty_match else 1
+            
+            # 1. Analysis Report
+            st.markdown(f"""
+            <div class="report-card">
+                <h2 style="color:#4CAF50; text-align:center;">📋 {item.upper()} REPORT</h2>
+                <div class="metric-line"><span class="m-label">🔥 Calories</span><span class="m-val">{data['cal'] * qty} kcal</span></div>
+                <div class="metric-line"><span class="m-label">💪 Protein</span><span class="m-val">{data['pro'] * qty} g</span></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-    for word in query.split():
-        match = get_close_matches(word, food_db.keys(), n=1, cutoff=0.7)
-        if match:
-            food = match[0]
-            data = food_db[food]
-            qty = extract_qty(food, query)
+            # 2. Red Flag
+            if u_goal == "Weight Loss" and data['type'] == "bad":
+                st.markdown(f'<div class="red-flag">🚩 RED FLAG: {item.capitalize()} goal ke khilaf hai!</div>', unsafe_allow_html=True)
 
-            total_cal += data['cal'] * qty
-            total_pro += data['pro'] * qty
+            # 3. Clean Doctor Advice
+            st.info(f"👨‍⚕️ **DOCTOR'S ADVICE:** {data['doc']}")
+            
+            # 4. Action Button
+            if st.button(f"Add {item.capitalize()} to Progress"):
+                st.session_state.daily_cal += (data['cal'] * qty)
+                st.session_state.daily_pro += (data['pro'] * qty)
+                st.rerun()
+            break
 
-    if total_cal > 0:
-        st.success(f"Total: {total_cal} kcal | {total_pro} g protein")
+    if not matched:
+        st.warning("🤖 AI is scanning... Dish milti-julti nahi hai.")
 
-        # AI AUTO FEEDBACK
-        try:
-            prompt = f"User ate {query}. Calories {total_cal}, Protein {total_pro}. Goal is {goal}. Give short advice."
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            st.info("AI Suggestion: " + response.choices[0].message.content)
-
-        except:
-            st.warning("AI not connected")
-
-        if st.button("Add to Progress"):
-            st.session_state.daily_cal += total_cal
-            st.session_state.daily_pro += total_pro
-
-            today = str(date.today())
-            if today not in st.session_state.history:
-                st.session_state.history[today] = {"cal": 0, "pro": 0}
-
-            st.session_state.history[today]["cal"] += total_cal
-            st.session_state.history[today]["pro"] += total_pro
-
-            save_data()
-            st.rerun()
-
-# ---------------- CHAT ----------------
 st.divider()
-st.subheader("AI Coach Chat")
-
-for chat in st.session_state.chat_history:
-    with st.chat_message(chat["role"]):
-        st.write(chat["content"])
-
-user_input = st.chat_input("Ask your coach")
-
-if user_input:
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-
-    with st.chat_message("user"):
-        st.write(user_input)
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=st.session_state.chat_history
-        )
-
-        reply = response.choices[0].message.content
-        st.session_state.chat_history.append({"role": "assistant", "content": reply})
-
-        with st.chat_message("assistant"):
-            st.write(reply)
-
-    except:
-        st.error("AI error")
-
-    save_data()
-
-# ---------------- ANALYTICS ----------------
-st.divider()
-st.subheader("Progress")
-
-if st.session_state.history:
-    df = pd.DataFrame(st.session_state.history).T
-    st.line_chart(df)
-
-# ---------------- CREDIT ----------------
-st.markdown("---")
-st.markdown("Developed by Abbas Ali")
+st.caption("Developed by Abbas Ali | Gemini Integrated V17.0 Stable")
