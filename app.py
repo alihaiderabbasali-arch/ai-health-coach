@@ -1,152 +1,135 @@
-import streamlit as st
-from datetime import date
+import streamlit as st from datetime import date import json import re from difflib import get_close_matches import pandas as pd from openai import OpenAI import os
 
-# 1. Page Configuration
-st.set_page_config(page_title="AI Health Coach PRO", page_icon="👨‍⚕️", layout="centered")
+------------------ CONFIG ------------------
 
-# 2. Advanced CSS (Clean & Fixed Design)
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .report-container { 
-        background-color: #1e2130; padding: 20px; border-radius: 15px; 
-        border-left: 5px solid #4CAF50; margin-bottom: 20px; color: white;
-    }
-    .data-line { font-size: 1.1em; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-    .value { color: #4CAF50; font-weight: bold; float: right; }
-    .red-flag {
-        background-color: rgba(255, 0, 0, 0.2); padding: 15px; 
-        border-radius: 10px; border: 2px solid #ff4b4b; margin-top: 15px;
-        color: #ff4b4b; font-weight: bold; animation: blinker 1.5s linear infinite;
-    }
-    @keyframes blinker { 50% { opacity: 0.5; } }
-    .doctor-advice { 
-        background-color: rgba(255, 204, 0, 0.1); padding: 15px; 
-        border-radius: 10px; border: 1px solid #ffcc00; margin-top: 15px; color: #ddd;
-    }
-    .medical-tag { color: #ffcc00; font-weight: bold; font-size: 1.1em; text-transform: uppercase; }
-    </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="AI Health Coach ELITE AI+", page_icon="🤖", layout="centered")
 
-# --- APP LOGIC / SESSION STATE ---
-if 'daily_cal' not in st.session_state: st.session_state.daily_cal = 0
-if 'daily_pro' not in st.session_state: st.session_state.daily_pro = 0
+✅ SAFE API KEY (ENV METHOD)
 
-# --- SIDEBAR (Interconnected 28-Day Dashboard) ---
-with st.sidebar:
-    st.header("🏁 28-Day Tracker")
-    user_goal = st.selectbox("Select Your Goal:", ["Weight Loss", "Weight Gain", "Muscle Building"])
-    weight_target = st.number_input("Target (kg)", 1, 20, 5)
-    
-    daily_limit = 1600 if user_goal == "Weight Loss" else 2800
-    
-    st.markdown("---")
-    st.subheader("📊 Today's Progress")
-    st.metric("Total Calories", f"{st.session_state.daily_cal} kcal")
-    st.metric("Protein Intake", f"{st.session_state.daily_pro}g")
-    
-    remaining = daily_limit - st.session_state.daily_cal
-    st.write(f"**Remaining:** {max(0, remaining)} kcal")
-    st.progress(min(st.session_state.daily_cal / daily_limit, 1.0))
-    
-    if st.button("Reset Stats"):
-        st.session_state.daily_cal = 0
-        st.session_state.daily_pro = 0
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+DATA_FILE = "health_data.json"
+
+------------------ LOAD/SAVE ------------------
+
+def load_data(): try: with open(DATA_FILE, "r") as f: data = json.load(f) for k, v in data.items(): st.session_state[k] = v except: pass
+
+def save_data(): data = { "daily_cal": st.session_state.daily_cal, "daily_pro": st.session_state.daily_pro, "history": st.session_state.history, "custom_foods": st.session_state.custom_foods, "streak": st.session_state.streak, "chat_history": st.session_state.chat_history } with open(DATA_FILE, "w") as f: json.dump(data, f)
+
+------------------ INIT ------------------
+
+if 'loaded' not in st.session_state: load_data() st.session_state.loaded = True
+
+if 'daily_cal' not in st.session_state: st.session_state.daily_cal = 0 if 'daily_pro' not in st.session_state: st.session_state.daily_pro = 0 if 'custom_foods' not in st.session_state: st.session_state.custom_foods = {} if 'history' not in st.session_state: st.session_state.history = {} if 'streak' not in st.session_state: st.session_state.streak = 0 if 'chat_history' not in st.session_state: st.session_state.chat_history = []
+
+------------------ SIDEBAR ------------------
+
+with st.sidebar: st.title("⚙️ AI SETTINGS+")
+
+weight = st.number_input("Weight (kg)", 40, 150, 70)
+goal = st.selectbox("Goal", ["Weight Loss", "Weight Gain", "Muscle Building"])
+
+if goal == "Weight Loss": limit = weight * 20
+elif goal == "Weight Gain": limit = weight * 35
+else: limit = weight * 30
+
+st.metric("🔥 Calories", f"{st.session_state.daily_cal}/{int(limit)}")
+st.metric("💪 Protein", f"{st.session_state.daily_pro}g")
+st.metric("🔥 Streak", f"{st.session_state.streak}")
+
+------------------ FOOD DB ------------------
+
+food_db = { "chai": {"tags": ["chai", "tea"], "cal": 90, "pro": 2}, "paratha": {"tags": ["paratha", "pratha"], "cal": 290, "pro": 6}, "egg": {"tags": ["egg", "anda"], "cal": 78, "pro": 7}, "biryani": {"tags": ["biryani", "rice"], "cal": 480, "pro": 18}, } food_db.update(st.session_state.custom_foods)
+
+------------------ MAIN ------------------
+
+st.title("🤖 AI Health Coach ELITE AI+ 🚀")
+
+query = st.text_input("Aaj kya khaya?").lower()
+
+------------------ FOOD LOGIC ------------------
+
+def extract_qty(food, text): match = re.search(r'(\d+)\s*' + food, text) return int(match.group(1)) if match else 1
+
+if query: total_cal, total_pro = 0, 0
+
+for word in query.split():
+    match = get_close_matches(word, food_db.keys(), n=1, cutoff=0.7)
+    if match:
+        food = match[0]
+        data = food_db[food]
+        qty = extract_qty(food, query)
+
+        total_cal += data['cal'] * qty
+        total_pro += data['pro'] * qty
+
+if total_cal > 0:
+    st.success(f"TOTAL: {total_cal} kcal | {total_pro}g protein")
+
+    # 🤖 AUTO AI FEEDBACK
+    try:
+        auto_prompt = f"User ate {query}. Calories {total_cal}, Protein {total_pro}. Goal is {goal}. Give short advice."
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": auto_prompt}]
+        )
+
+        st.info("🧠 AI Suggestion: " + response.choices[0].message.content)
+    except:
+        st.warning("AI not connected")
+
+    if st.button("Add to Progress"):
+        st.session_state.daily_cal += total_cal
+        st.session_state.daily_pro += total_pro
+        save_data()
         st.rerun()
 
-# --- MAIN APP ---
-st.title("👨‍⚕️ Global Desi Health AI")
-st.write(f"Goal: **{user_goal}** | Challenge Day: **{date.today().day % 28}**")
+------------------ CHAT UI ------------------
 
-# --- MASTER DATABASE (Desi + Global) ---
-food_db = {
-    "paratha": {
-        "tags": ["paratha", "pratha", "porota", "parontha", "pountha", "desi ghee roti", "fried bread"],
-        "cal": 290, "pro": 6, "fat": 15, "carb": 42, "min": "Iron, Sodium", "type": "bad",
-        "doc": "Medical Warning: High saturated fats. Switch to Multigrain Roti for better heart health."
-    },
-    "egg": {
-        "tags": ["egg", "anda", "anday", "dim", "baida", "omelette", "amlet", "half fry", "boiled egg", "ubla anda"],
-        "cal": 78, "pro": 7, "fat": 5, "carb": 0.6, "min": "Zinc, Vitamin D, B12", "type": "good",
-        "doc": "Clinical Advice: Pure protein source. 2 boiled eggs are highly recommended for muscle recovery."
-    },
-    "chai": {
-        "tags": ["chai", "tea", "doodh patti", "mix chai", "karak", "pink tea", "cup of tea", "shai", "coffee"],
-        "cal": 90, "pro": 2, "fat": 3, "carb": 12, "min": "Magnesium, Antioxidants", "type": "neutral",
-        "doc": "Specialist Note: Limit sugar. Excessive tea inhibits calcium absorption. Keep a 1-hour gap from meals."
-    },
-    "biryani": {
-        "tags": ["biryani", "briyani", "rice", "chawal", "pulao", "polao", "tahari", "chicken rice", "mutton rice"],
-        "cal": 480, "pro": 18, "fat": 22, "carb": 65, "min": "Sodium, Potassium", "type": "bad",
-        "doc": "Doctor's Warning: High sodium retention risk. Avoid eating this at night during your challenge."
-    },
-    "roti": {
-        "tags": ["roti", "chapati", "phulka", "bread", "phulki", "khamiri", "naan", "tandoori"],
-        "cal": 120, "pro": 4, "fat": 0.5, "carb": 26, "min": "Fiber, Magnesium", "type": "good",
-        "doc": "Doctor's Advice: Whole wheat roti fiber is great for insulin control and keeping you full."
-    },
-    "chicken grill": {
-        "tags": ["chicken", "tikka", "grill", "murghi", "karahi", "roasted chicken", "murgi", "kebab", "kabab"],
-        "cal": 230, "pro": 31, "fat": 4, "carb": 0, "min": "B6, Zinc, Phosphorus", "type": "good",
-        "doc": "Expert Choice: The gold standard for fat loss and muscle building. Highly recommended."
-    },
-    "daal": {
-        "tags": ["daal", "dal", "lentils", "dhal", "tadka dal", "chanay", "lobia", "shorba"],
-        "cal": 180, "pro": 9, "fat": 2, "carb": 30, "min": "Plant protein, Fiber", "type": "good",
-        "doc": "Nutritionist: High fiber helps digestion. A very healthy desi option for any goal."
-    },
-    "apple": {
-        "tags": ["apple", "seb", "fruit", "phal", "aple"],
-        "cal": 52, "pro": 0.3, "fat": 0.2, "carb": 14, "min": "Vitamin C, Fiber", "type": "good",
-        "doc": "Medical Fact: High pectin fiber helps lower cholesterol. Ideal snack for weight loss."
-    }
-}
+st.divider() st.subheader("💬 AI Chat Coach")
 
-# --- SEARCH & UI LOGIC ---
-query = st.text_input("Aapne aaj kya khaya?", placeholder="Maslan: Maine ek cup chai pi aur anda khaya...").lower()
+for chat in st.session_state.chat_history: with st.chat_message(chat["role"]): st.write(chat["content"])
 
-if query:
-    found_any = False
-    for meal_key, data in food_db.items():
-        if any(tag in query for tag in data["tags"]):
-            found_any = True
-            
-            # 🎨 HTML DESIGN BUILDING
-            report_html = f"""
-            <div class="report-container">
-                <h2 style="color:#4CAF50;">📋 Analysis: {meal_key.upper()}</h2>
-                <div class="data-line">🔥 Calories: <span class="value">{data['cal']} kcal</span></div>
-                <div class="data-line">💪 Protein: <span class="value">{data['pro']}g</span></div>
-                <div class="data-line">🍔 Total Fats: <span class="value">{data['fat']}g</span></div>
-                <div class="data-line">🍞 Carbohydrates: <span class="value">{data['carb']}g</span></div>
-                <div class="data-line">🧪 Minerals: <span class="value">{data['min']}</span></div>
-            """
+user_input = st.chat_input("Ask your AI coach...")
 
-            if user_goal == "Weight Loss" and data['type'] == "bad":
-                report_html += '<div class="red-flag">🚩 RED FLAG: Yeh aapke Weight Loss goal ke khilaf hai!</div>'
-            elif user_goal == "Weight Gain" and meal_key == "apple":
-                report_html += '<div class="red-flag">🚩 NOTE: Weight Gain ke liye sirf phal kafi nahi!</div>'
+if user_input: st.session_state.chat_history.append({"role": "user", "content": user_input})
 
-            report_html += f"""
-                <div class="doctor-advice">
-                    <span class="medical-tag">👨‍⚕️ SENIOR DOCTOR'S ADVICE:</span><br>
-                    <p style="margin-top:10px;">{data['doc']}</p>
-                </div>
-            </div>
-            """
-            
-            # RENDER DESIGN
-            st.markdown(report_html, unsafe_allow_html=True)
-            
-            # ACTION BUTTON
-            if st.button(f"Add {meal_key.capitalize()} to Progress"):
-                st.session_state.daily_cal += data['cal']
-                st.session_state.daily_pro += data['pro']
-                st.rerun()
-            break
+with st.chat_message("user"):
+    st.write(user_input)
 
-    if not found_any:
-        st.info("🤖 AI is scanning... Hum jald hi is desi naam ko database mein add kar denge!")
+try:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=st.session_state.chat_history
+    )
 
-st.divider()
-st.caption("Developed by Abbas Ali | Everything Integrated Final V15.0")
+    reply = response.choices[0].message.content
+    st.session_state.chat_history.append({"role": "assistant", "content": reply})
+
+    with st.chat_message("assistant"):
+        st.write(reply)
+
+except:
+    st.error("AI error")
+
+save_data()
+
+------------------ ANALYTICS ------------------
+
+st.divider() st.subheader("📊 Progress")
+
+if st.session_state.history: df = pd.DataFrame(st.session_state.history).T st.line_chart(df)
+
+st.caption("AI FULLY INTEGRATED LEVEL 1 COMPLETE 🚀")
+
+------------------ DEVELOPER CREDIT ------------------
+
+st.markdown("""
+
+👨‍💻 Developed By
+
+Abbas Ali (AI Health Coach Creator)
+Founder & Builder of AI Fitness System 💪🤖
+
+🚀 "Built with passion to transform health through AI" """)
