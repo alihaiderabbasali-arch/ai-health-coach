@@ -1,87 +1,95 @@
 import streamlit as st
+from datetime import date
 
-# 1. Page Configuration (Pro Look)
+# 1. Page Configuration
 st.set_page_config(page_title="AI Health Coach PRO", page_icon="🥗", layout="centered")
 
-# 2. Professional Styling (CSS)
+# 2. Simple & Clean Styling (Har mobile ke liye best)
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    .stTextInput>div>div>input { background-color: #1e2130; color: white; border-radius: 10px; }
-    .meal-card { 
-        background: linear-gradient(135deg, #1e2130 0%, #2b2f44 100%); 
-        padding: 25px; 
-        border-radius: 20px; 
-        border-left: 8px solid #4CAF50; 
-        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        margin-bottom: 25px;
+    .report-container { 
+        background-color: #1e2130; 
+        padding: 20px; 
+        border-radius: 15px; 
+        border-left: 5px solid #4CAF50; 
+        margin-bottom: 20px;
+        color: white;
     }
-    .stat-box { 
-        background-color: rgba(76, 175, 80, 0.1); 
+    .data-line { 
+        font-size: 1.1em; 
+        margin-bottom: 8px; 
+        border-bottom: 1px solid #333;
+        padding-bottom: 5px;
+    }
+    .value { color: #4CAF50; font-weight: bold; float: right; }
+    .doctor-advice { 
+        background-color: rgba(255, 204, 0, 0.1); 
         padding: 15px; 
-        border-radius: 12px; 
-        border: 1px solid #4CAF50; 
-        text-align: center;
+        border-radius: 10px; 
+        border: 1px solid #ffcc00;
+        margin-top: 15px;
+        color: #ddd;
     }
-    .doctor-tag { color: #ffcc00; font-weight: bold; font-size: 1.1em; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. App Header
-st.title("🚀 AI Health Coach: Pro Edition")
-st.markdown("---")
+# --- SIDEBAR: 28-DAY CHALLENGE SETTINGS ---
+with st.sidebar:
+    st.header("🏁 Challenge Settings")
+    st.write("Apna target yahan set karein:")
+    
+    # Target Settings
+    weight_target = st.number_input("Weight Loss Goal (kg)", 1, 20, 5)
+    start_date = st.date_input("Start Date", date.today())
+    
+    # Progress Calculation
+    st.markdown("---")
+    current_day = st.slider("Aaj Konsa Din Hai?", 1, 28, 1)
+    progress_val = current_day / 28
+    
+    st.write(f"📊 **Progress: Day {current_day} of 28**")
+    st.progress(progress_val)
+    st.success(f"Target: **{weight_target}kg** Kam Karna!")
+    st.info("Tip: Rozana meal check-in lazmi karein.")
 
-# 4. Smart Brain (Meal Intelligence Database)
-# Isko hum mazeed barhayenge, ye asli logic hai
+# --- MAIN APP: MEAL TRACKER ---
+st.title("🚀 AI Health Coach PRO")
+st.write("Aapne aaj kya khaya? AI se report lein:")
+
+# Smart Database (Simple List Style)
 meal_intelligence = {
-    "paratha": {"cal": 290, "pro": 6, "fat": 15, "carb": 42, "doc": "High Carbs! Iske saath protein (eggs) lazmi lein taake sugar spike na ho."},
-    "egg": {"cal": 78, "pro": 7, "fat": 5, "carb": 0.6, "doc": "Superfood! Muscles banane ke liye behtareen protein source hai."},
-    "roti": {"cal": 120, "pro": 4, "fat": 0.5, "carb": 26, "doc": "Good fiber! Weight loss ke liye parathay se behtar choice hai."},
-    "biryani": {"cal": 480, "pro": 18, "fat": 22, "carb": 65, "doc": "Caution: Oil zyada hai. Aaj 30 min extra workout karein."},
-    "apple": {"cal": 52, "pro": 0.3, "fat": 0.2, "carb": 14, "advice": "Great snack! Vitamins aur fiber ka khazana."},
-    "chicken": {"cal": 239, "pro": 27, "fat": 14, "carb": 0, "doc": "Muscle Recovery King! Isay boil ya grill karke khana best hai."}
+    "paratha": {"cal": 290, "pro": 6, "fat": 15, "carb": 42, "doc": "Paratha mein carbs aur fats zyada hain. Challenge ke liye iske saath 2 boil anday khayein."},
+    "egg": {"cal": 78, "pro": 7, "fat": 5, "carb": 0.6, "doc": "Superfood! Protein se bharpoor. Muscles banane aur weight loss mein madad karta hai."},
+    "roti": {"cal": 120, "pro": 4, "fat": 0.5, "carb": 26, "doc": "Best for weight loss! Gandum ki roti fiber ka behtareen zariya hai."},
+    "biryani": {"cal": 480, "pro": 18, "fat": 22, "carb": 65, "doc": "Caution: Biryani mein calories bohat zyada hain. Aaj walk double karni paregi!"},
+    "nihari": {"cal": 550, "pro": 25, "fat": 35, "carb": 15, "doc": "Protein acha hai magar oil zyada hai. Challenge ke dauran kam hi khayein."},
+    "chai": {"cal": 90, "pro": 2, "fat": 3, "carb": 12, "doc": "Sugar kam rakhein. Green tea ya baghair cheeni ki chai behtar hai."}
 }
 
-# 5. User Input Section
-st.subheader("📝 Daily Meal Entry")
-user_input = st.text_input("Aapne kya khaya? (e.g. 2 egg aur 1 paratha)", placeholder="Yahan type karein...").lower()
+user_input = st.text_input("", placeholder="Type here: egg, paratha, biryani...").lower()
 
 if user_input:
-    st.markdown("### 📊 AI Nutritional Breakdown")
-    found_any = False
-    
-    # AI Search Logic
+    found = False
     for meal, data in meal_intelligence.items():
         if meal in user_input:
-            found_any = True
-            # Professional Output Card
+            found = True
             st.markdown(f"""
-            <div class="meal-card">
-                <h2 style="color:#4CAF50; margin-top:0;">✅ {meal.upper()} Detected</h2>
-                <div style="display: flex; justify-content: space-between; gap: 10px;">
-                    <div class="stat-box">🔥<br><b>{data['cal']}</b><br>Calories</div>
-                    <div class="stat-box">💪<br><b>{data['pro']}g</b><br>Protein</div>
-                    <div class="stat-box">🍔<br><b>{data['fat']}g</b><br>Fats</div>
-                    <div class="stat-box">🍞<br><b>{data['carb']}g</b><br>Carbs</div>
+            <div class="report-container">
+                <h2 style="color:#4CAF50; margin-bottom:15px;">✅ {meal.upper()} Report</h2>
+                <div class="data-line">🔥 Total Calories: <span class="value">{data['cal']} kcal</span></div>
+                <div class="data-line">💪 Protein: <span class="value">{data['pro']}g</span></div>
+                <div class="data-line">🍔 Total Fats: <span class="value">{data['fat']}g</span></div>
+                <div class="data-line">🍞 Carbohydrates: <span class="value">{data['carb']}g</span></div>
+                <div class="doctor-advice">
+                    <b style="color:#ffcc00;">👨‍⚕️ Doctor's Advice:</b><br>
+                    {data['doc']}
                 </div>
-                <hr style="border: 0.5px solid #444;">
-                <p class="doctor-tag">👨‍⚕️ Pro Doctor Advice:</p>
-                <p style="color: #ddd;">{data['doc']}</p>
             </div>
             """, unsafe_allow_html=True)
+    
+    if not found:
+        st.info("🤖 AI is checking... Hum jald hi is desi dish ka data add kar denge!")
 
-    if not found_any:
-        st.info("🤖 AI is learning this meal... Humne ise update list mein daal diya hai!")
-
-# 6. Sidebar for 28-Day Tracker
-with st.sidebar:
-    st.header("🏁 28-Day Challenge")
-    st.write("Day: **4 of 28**")
-    st.progress(14)
-    st.success("Target: 5kg Loss")
-    st.markdown("---")
-    st.write("🔥 Total Calories Today: **368**")
-    st.write("💪 Protein Goal: **45g / 120g**")
-
-st.markdown("---")
-st.caption("AI Health Coach V3.0 | Developed by Abbas Ali")
+st.divider()
+st.caption("Developed by Abbas Ali | Everything set in one place!")
