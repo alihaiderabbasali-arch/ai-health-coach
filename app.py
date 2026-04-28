@@ -9,7 +9,7 @@ st.set_page_config(page_title="Sehat28", page_icon="🥗", layout="centered")
 
 DATA_FILE = "sehat28_master_data.json"
 
-# --- 2. STORAGE ENGINE (With Auto-Migration) ---
+# --- 2. STORAGE ENGINE ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -29,8 +29,7 @@ if 'app_data' not in st.session_state:
 
 db = st.session_state.app_data
 
-# --- 3. THE HUGE DESI DICTIONARY (India, Pakistan, Bangladesh) ---
-# Format: [Calories, Protein, Carbs, Fats, Vitamins]
+# --- 3. UPDATED DESI DICTIONARY ---
 master_food_db = {
     "Roti/Chapati": {"tags": ["roti", "chapati", "phulka", "nan", "naan", "khamiri"], "vals": [110, 3, 22, 1, 2]},
     "Paratha": {"tags": ["paratha", "pratha", "porota", "aloo paratha"], "vals": [290, 6, 35, 14, 1]},
@@ -46,33 +45,27 @@ master_food_db = {
     "Fish": {"tags": ["fish", "machli", "machli fry"], "vals": [200, 22, 0, 10, 6]}
 }
 
-# --- 4. SMART SEARCH LOGIC ---
-def calculate_nutrition(user_input):
+# --- 4. ENGINE ---
+def process_diet(text):
     total = [0, 0, 0, 0, 0]
-    found_items = []
-    text = user_input.lower()
-    
+    items_added = []
+    text = text.lower()
     for name, info in master_food_db.items():
         for tag in info["tags"]:
             if tag in text:
-                # Qty dhoondne ki koshish (e.g., "2 roti" or "roti 2")
                 match = re.search(rf'(\d+)\s*{tag}|{tag}\s*(\d+)', text)
-                qty = 1
-                if match:
-                    qty = int(match.group(1) or match.group(2))
-                
+                qty = int(match.group(1) or match.group(2)) if match else 1
                 for i in range(5):
                     total[i] += info["vals"][i] * qty
-                found_items.append(f"{qty} {name}")
-                break # Ek category ke liye ek hi tag kafi hai
-    return total, found_items
+                items_added.append(f"{qty} {name}")
+                break
+    return total, items_added
 
 # --- 5. MAIN UI ---
 st.title("🥗 Sehat28")
-st.markdown("*Apki Sehat, Apki Zubaan Mein*")
 
 if not db.get("profile"):
-    st.subheader("👋 Profile Setup")
+    st.subheader("👋 Setup Profile")
     c1, c2 = st.columns(2)
     with c1:
         w = st.number_input("Weight (kg)", 40, 150, 70)
@@ -81,7 +74,7 @@ if not db.get("profile"):
         a = st.number_input("Age", 15, 80, 25)
         g = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"])
     
-    if st.button("🚀 Start Challenge", use_container_width=True):
+    if st.button("🚀 Start 28-Day Challenge", use_container_width=True):
         target = (10*w + 6.25*h - 5*a + 5) * 1.2
         db["profile"] = {"target": int(target-500 if g=="Weight Loss" else target+500), "goal": g}
         save_data(db)
@@ -95,39 +88,40 @@ else:
     st.markdown(f"### 🏆 Day {day} / 28")
 
     # --- INPUT SECTION ---
-    query = st.text_input("Aap ne kya khaya?", placeholder="e.g. 2 roti aur murghi karahi")
+    food_query = st.text_input("Aap ne kya khaya?", placeholder="e.g. 1 roti, 2 anda", key="food_box")
     
-    col_a, col_b = st.columns(2)
-    if col_a.button("➕ Add Food", use_container_width=True):
-        if query:
-            results, items = calculate_nutrition(query)
+    # Chota aur simple button
+    if st.button("➕ Add Meal", use_container_width=True, type="primary"):
+        if food_query:
+            res, items = process_diet(food_query)
             if items:
-                db["history"][day_key]["cal"] += results[0]
-                db["history"][day_key]["pro"] += results[1]
-                db["history"][day_key]["carb"] += results[2]
-                db["history"][day_key]["fat"] += results[3]
-                db["history"][day_key]["vit"] += results[4]
+                db["history"][day_key]["cal"] += res[0]
+                db["history"][day_key]["pro"] += res[1]
+                db["history"][day_key]["carb"] += res[2]
+                db["history"][day_key]["fat"] += res[3]
+                db["history"][day_key]["vit"] += res[4]
                 save_data(db)
-                st.success(f"Added: {', '.join(items)}")
+                st.toast(f"✅ Added: {', '.join(items)}")
                 st.rerun()
             else:
-                st.warning("Sorry! Ye hamari desi list mein nahi hai. Kuch aur try karein?")
+                st.error("Nahi mila. Try: roti, anda, chawal, etc.")
 
-    if col_b.button("💧 Add Water", use_container_width=True):
+    if st.button("💧 Add Water", use_container_width=True):
         db["history"][day_key]["water"] += 1
         save_data(db)
         st.rerun()
 
     st.divider()
 
-    # --- LINEAR STATUS ---
+    # --- STATUS DISPLAY ---
     s = db["history"][day_key]
     t = db["profile"]["target"]
     
     st.write(f"🔥 **Calories:** {s['cal']} / {t} kcal")
     st.progress(min(s['cal']/t, 1.0) if t > 0 else 0)
-    st.write(f"💪 **Protein:** {s['pro']}g | 🥖 **Carbs:** {s['carb']}g")
-    st.write(f"🥑 **Fats:** {s['fat']}g | ✨ **Vitamins:** {s['vit']} pts")
+    
+    st.write(f"💪 **Protein:** {s['pro']}g  |  🥖 **Carbs:** {s['carb']}g")
+    st.write(f"🥑 **Fats:** {s['fat']}g  |  ✨ **Vitamins:** {s['vit']} pts")
     st.write(f"💧 **Water:** {s['water']} / 12 Glasses")
 
     st.divider()
