@@ -2,92 +2,139 @@ import streamlit as st
 from datetime import date
 import pandas as pd
 import re
+import json
 import os
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Gemini Health Engine", page_icon="👨‍⚕️", layout="centered")
+# --- 1. CONFIG & STYLING ---
+st.set_page_config(page_title="Gemini 28-Day Ultra", page_icon="🏆", layout="wide")
+DATA_FILE = "ultra_challenge_data.json"
 
-# --- CLEAN DESIGN (No Bugs) ---
 st.markdown("""
     <style>
-    .report-card { 
-        background-color: #1e2130; padding: 20px; border-radius: 15px; 
-        border: 2px solid #4CAF50; color: white; margin-bottom: 15px;
-    }
-    .metric-line { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding: 8px 0; }
-    .m-label { color: #aaa; }
-    .m-val { color: #4CAF50; font-weight: bold; }
-    .red-flag { background-color: #451313; color: #ff4b4b; padding: 10px; border-radius: 10px; text-align: center; margin-top: 10px; border: 1px solid #ff4b4b; }
+    .challenge-card { background: linear-gradient(135deg, #1e2130 0%, #2b2f48 100%); padding: 20px; border-radius: 15px; border: 1px solid #4CAF50; color: white; text-align: center; }
+    .stat-box { background: #11141e; padding: 10px; border-radius: 10px; border: 1px solid #333; margin: 5px; text-align: center; }
+    .water-btn { background-color: #2196F3; color: white; border-radius: 50%; width: 50px; height: 50px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- APP LOGIC & MEMORY ---
-if 'daily_cal' not in st.session_state: st.session_state.daily_cal = 0
-if 'daily_pro' not in st.session_state: st.session_state.daily_pro = 0
+# --- 2. STORAGE SYSTEM ---
+def load_all_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r") as f: return json.load(f)
+    return {"profile": {}, "days_log": {}, "current_day": 1}
 
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("🏁 28-Day Tracker")
-    u_goal = st.selectbox("Select Goal:", ["Weight Loss", "Weight Gain", "Muscle Building"])
-    limit = 1600 if u_goal == "Weight Loss" else 2800
-    
-    st.metric("Total Calories", f"{st.session_state.daily_cal} kcal")
-    st.metric("Total Protein", f"{st.session_state.daily_pro} g")
-    st.progress(min(st.session_state.daily_cal / limit, 1.0))
-    
-    if st.button("Reset Stats"):
-        st.session_state.daily_cal, st.session_state.daily_pro = 0, 0
-        st.rerun()
+def save_all_data(data):
+    with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
 
-# --- MAIN INTERFACE ---
-st.title("👨‍⚕️ Gemini Pro Health AI")
-st.write(f"**Goal:** {u_goal} | **Challenge Day:** {date.today().day % 28}")
+if 'pro_data' not in st.session_state:
+    st.session_state.pro_data = load_all_data()
 
-# Master Dictionary
+db = st.session_state.pro_data
+
+# --- 3. FOOD DICTIONARY (Desi Integrated) ---
 food_db = {
-    "chai": {"tags": ["chai", "tea", "doodh patti"], "cal": 90, "pro": 2, "type": "neutral", "doc": "Limit sugar. Keep gap from meals."},
-    "paratha": {"tags": ["paratha", "pratha", "porota"], "cal": 290, "pro": 6, "type": "bad", "doc": "High saturated fats. Avoid in weight loss."},
-    "egg": {"tags": ["egg", "anda", "boiled egg"], "cal": 78, "pro": 7, "type": "good", "doc": "Pure protein. Best for muscle recovery."},
-    "biryani": {"tags": ["biryani", "rice", "chawal"], "cal": 480, "pro": 18, "type": "bad", "doc": "High carb/sodium. Portion control needed."}
+    "paratha": {"cal": 290, "tags": ["paratha", "pratha"]},
+    "anda": {"cal": 78, "tags": ["egg", "anda", "eggs"]},
+    "biryani": {"cal": 450, "tags": ["biryani", "pulao", "rice", "chawal"]},
+    "roti": {"cal": 110, "tags": ["roti", "chapati"]},
+    "daal": {"cal": 180, "tags": ["daal", "dal"]},
+    "chicken": {"cal": 300, "tags": ["chicken", "murghi", "tikka"]},
+    "chai": {"cal": 90, "tags": ["chai", "tea"]},
+    "fruit": {"cal": 80, "tags": ["fruit", "apple", "banana", "kela"]}
 }
 
-query = st.text_input("Aap ne aaj kya khaya?", placeholder="e.g. Maine 2 anday aur 1 chai pi...").lower()
-
-if query:
-    matched = False
-    for item, data in food_db.items():
-        if any(tag in query for tag in data["tags"]):
-            matched = True
-            
-            # Simple Quantity Extraction
-            qty_match = re.search(r'(\d+)', query)
-            qty = int(qty_match.group(1)) if qty_match else 1
-            
-            # 1. Analysis Report
-            st.markdown(f"""
-            <div class="report-card">
-                <h2 style="color:#4CAF50; text-align:center;">📋 {item.upper()} REPORT</h2>
-                <div class="metric-line"><span class="m-label">🔥 Calories</span><span class="m-val">{data['cal'] * qty} kcal</span></div>
-                <div class="metric-line"><span class="m-label">💪 Protein</span><span class="m-val">{data['pro'] * qty} g</span></div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            # 2. Red Flag
-            if u_goal == "Weight Loss" and data['type'] == "bad":
-                st.markdown(f'<div class="red-flag">🚩 RED FLAG: {item.capitalize()} goal ke khilaf hai!</div>', unsafe_allow_html=True)
-
-            # 3. Clean Doctor Advice
-            st.info(f"👨‍⚕️ **DOCTOR'S ADVICE:** {data['doc']}")
-            
-            # 4. Action Button
-            if st.button(f"Add {item.capitalize()} to Progress"):
-                st.session_state.daily_cal += (data['cal'] * qty)
-                st.session_state.daily_pro += (data['pro'] * qty)
+# --- 4. SIDEBAR & PROFILE ---
+with st.sidebar:
+    st.title("👤 Health Profile")
+    if not db["profile"]:
+        with st.form("p_form"):
+            weight = st.number_input("Weight (kg)", 40, 150, 70)
+            height = st.number_input("Height (cm)", 120, 220, 170)
+            age = st.number_input("Age", 15, 80, 25)
+            goal = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"])
+            if st.form_submit_button("Start 28-Day Challenge"):
+                # Simplified Target Calculation
+                target = (10*weight + 6.25*height - 5*age + 5) * 1.2
+                db["profile"] = {"target": int(target - 500 if goal == "Weight Loss" else target + 500), "goal": goal}
+                save_all_data(db)
                 st.rerun()
-            break
+    else:
+        st.success(f"Goal: {db['profile']['goal']}")
+        st.metric("Daily Target", f"{db['profile']['target']} kcal")
+        if st.button("Reset All Data"):
+            st.session_state.pro_data = {"profile": {}, "days_log": {}, "current_day": 1}
+            save_all_data(st.session_state.pro_data)
+            st.rerun()
 
-    if not matched:
-        st.warning("🤖 AI is scanning... Dish milti-julti nahi hai.")
+# --- 5. MAIN DASHBOARD ---
+if not db["profile"]:
+    st.warning("👈 Please set up your profile in the sidebar first!")
+else:
+    # Top Challenge Header
+    day = db["current_day"]
+    st.markdown(f"""<div class="challenge-card"><h1>🏆 Day {day} of 28</h1><p>Consistency is the key to success!</p></div>""", unsafe_allow_html=True)
+    
+    # Progress Data for Today
+    day_key = f"day_{day}"
+    if day_key not in db["days_log"]:
+        db["days_log"][day_key] = {"cal": 0, "water": 0, "meals": []}
 
-st.divider()
-st.caption("Developed by Abbas Ali | Gemini Integrated V17.0 Stable")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🍽️ Meal Tracker")
+        query = st.text_input("Aap ne kya khaya?", key="food_in").lower()
+        if query:
+            for item, info in food_db.items():
+                for tag in info["tags"]:
+                    if tag in query:
+                        num = re.search(r'(\d+)', query)
+                        qty = int(num.group(1)) if num else 1
+                        total_cal = info['cal'] * qty
+                        if st.button(f"Add {qty} {item} ({total_cal} kcal)"):
+                            db["days_log"][day_key]["cal"] += total_cal
+                            db["days_log"][day_key]["meals"].append(f"{qty} {item}")
+                            save_all_data(db)
+                            st.rerun()
+
+    with col2:
+        st.subheader("💧 Water Intake")
+        c_water = db["days_log"][day_key]["water"]
+        st.write(f"Glasses Drunk: **{c_water}** / 12")
+        if st.button("➕ Add 1 Glass Water"):
+            db["days_log"][day_key]["water"] += 1
+            save_all_data(db)
+            st.rerun()
+
+    st.divider()
+
+    # Integrated Stats
+    c1, c2, c3 = st.columns(3)
+    today_cal = db["days_log"][day_key]["cal"]
+    target_cal = db["profile"]["target"]
+    
+    with c1:
+        st.metric("Calories Consumed", f"{today_cal} kcal")
+        st.progress(min(today_cal / target_cal, 1.0))
+    with c2:
+        water_pct = min(c_water / 12, 1.0)
+        st.metric("Hydration Status", f"{int(water_pct*100)}%")
+        st.progress(water_pct)
+    with c3:
+        if st.button("🏁 COMPLETE DAY & MOVE NEXT"):
+            if day < 28:
+                db["current_day"] += 1
+                save_all_data(db)
+                st.success(f"Day {day} Completed! See you tomorrow.")
+                st.rerun()
+            else:
+                st.balloons()
+                st.success("CONGRATULATIONS! 28-Day Challenge Completed!")
+
+    # 📈 HISTORY CHART
+    st.subheader("📈 28-Day Journey Analysis")
+    if db["days_log"]:
+        history_df = pd.DataFrame.from_dict(db["days_log"], orient='index')
+        st.line_chart(history_df[['cal', 'water']])
+
+st.caption("Developed by Abbas Ali | Gemini Integrated V28.0 Ultra Stable")
