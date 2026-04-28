@@ -10,23 +10,32 @@ st.set_page_config(page_title="Sehat28", page_icon="🥗", layout="centered")
 
 DATA_FILE = "sehat28_master_data.json"
 
+# --- 2. STORAGE ENGINE (With Auto-Fix for KeyError) ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
-            with open(DATA_FILE, "r") as f: return json.load(f)
-        except: return {"profile": {}, "current_day": 1, "history": {}}
+            with open(DATA_FILE, "r") as f:
+                data = json.load(f)
+                # ERROR FIX: Agar 'history' dictionary nahi hai to bana do
+                if "history" not in data:
+                    data["history"] = {}
+                if "current_day" not in data:
+                    data["current_day"] = 1
+                return data
+        except:
+            return {"profile": {}, "current_day": 1, "history": {}}
     return {"profile": {}, "current_day": 1, "history": {}}
 
 def save_data(data):
-    with open(DATA_FILE, "w") as f: json.dump(data, f, indent=4)
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
 if 'app_data' not in st.session_state:
     st.session_state.app_data = load_data()
 
 db = st.session_state.app_data
 
-# --- 2. NUTRITION DB (Updated with Vitamins) ---
-# Format: [Calories, Protein, Carbs, Fats, Vitamins]
+# --- 3. NUTRITION DB ---
 food_db = {
     "paratha": {"tags": ["paratha", "pratha"], "vals": [290, 6, 35, 14, 1]},
     "anda": {"tags": ["egg", "anda", "eggs"], "vals": [78, 7, 1, 5, 4]},
@@ -40,7 +49,7 @@ food_db = {
     "doodh": {"tags": ["milk", "doodh"], "vals": [150, 8, 12, 8, 8]}
 }
 
-# --- 3. UI ---
+# --- 4. MAIN UI ---
 st.title("🥗 Sehat28")
 st.markdown("*Badlo Apni Sehat, Badlo Apni Zindagi*")
 
@@ -58,12 +67,14 @@ if not db.get("profile"):
 else:
     day = db["current_day"]
     day_key = f"day_{day}"
+    
+    # Check again if history exists for current day
     if day_key not in db["history"]:
         db["history"][day_key] = {"cal": 0, "pro": 0, "carb": 0, "fat": 0, "vit": 0, "water": 0}
 
     st.markdown(f"### 🏆 Day {day} / 28")
 
-    # --- INPUTS ---
+    # Inputs
     query = st.text_input("Aap ne kya khaya?", placeholder="e.g. 2 anda, 1 roti")
     
     col_a, col_b = st.columns(2)
@@ -89,7 +100,7 @@ else:
 
     st.divider()
 
-    # --- LINEAR STATUS (Clean & Slim) ---
+    # Linear Status Display
     s = db["history"][day_key]
     t = db["profile"]["target"]
     
@@ -104,7 +115,6 @@ else:
 
     st.divider()
 
-    # --- CONTROLS ---
     if st.button("🏁 Finish Day", use_container_width=True):
         if day < 28:
             db["current_day"] += 1
@@ -112,7 +122,7 @@ else:
             st.balloons()
             st.rerun()
 
-    with st.expander("📜 View Full History & Settings"):
+    with st.expander("📜 View History & Settings"):
         if db["history"]:
             st.table(pd.DataFrame.from_dict(db['history'], orient='index'))
         if st.button("Reset All Progress"):
@@ -120,5 +130,4 @@ else:
             st.session_state.app_data = {"profile": {}, "current_day": 1, "history": {}}
             st.rerun()
 
-# --- FOOTER ---
 st.markdown("<p style='text-align: center; color: #888; font-size: 0.8em;'>Developed by Abbas Ali | Sehat28 V1.0 Stable</p>", unsafe_allow_html=True)
