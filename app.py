@@ -9,26 +9,33 @@ st.set_page_config(page_title="Sehat28", page_icon="🥗", layout="centered")
 
 DATA_FILE = "sehat28_master_data.json"
 
-# --- 2. STORAGE & REPAIR ENGINE ---
+# --- 2. THE ULTIMATE REPAIR ENGINE ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r") as f:
                 data = json.load(f)
                 
-                # REPAIR LOGIC: Agar purana data error de raha hai toh use auto-fix karo
+                # Sab se ahem: Profile check aur repair
                 if "profile" in data and data["profile"]:
                     p = data["profile"]
-                    # Agar BMR missing hai (jo error ki wajah hai), toh use fix karo
+                    # Agar BMR missing hai toh fix karein
                     if "bmr" not in p:
                         w = p.get("w", p.get("Weight (kg)", 70))
                         h = p.get("h", p.get("Height (cm)", 170))
                         a = p.get("a", p.get("Age", 25))
-                        # Default BMR calculation for repair
                         p["bmr"] = int((10*w + 6.25*h - 5*a + 5) * 1.2)
                         p["w"], p["h"], p["a"] = w, h, a
-                
+
+                # Dusra ahem: History check (KeyErrors ko khatam karne ke liye)
                 if "history" not in data: data["history"] = {}
+                for day in data["history"]:
+                    day_data = data["history"][day]
+                    # Jo bhi missing key error de rahi hai, usey yahan 0 set kar dein
+                    keys_to_fix = ["bad_items", "cal", "pro", "carb", "fat", "vit", "water"]
+                    for k in keys_to_fix:
+                        if k not in day_data: day_data[k] = 0
+                
                 if "current_day" not in data: data["current_day"] = 1
                 return data
         except: return {"profile": {}, "current_day": 1, "history": {}}
@@ -42,7 +49,7 @@ if 'app_data' not in st.session_state:
 
 db = st.session_state.app_data
 
-# --- 3. FOOD DB ---
+# --- 3. FOOD DATABASE ---
 master_food_db = {
     "Roti/Chapati": {"tags": ["roti", "chapati", "phulka", "nan", "naan"], "vals": [110, 3, 22, 1, 2], "type": "good"},
     "Paratha": {"tags": ["paratha", "pratha", "porota"], "vals": [290, 6, 35, 14, 1], "type": "heavy"},
@@ -70,34 +77,36 @@ def process_diet(text):
                 break
     return total, items, bads
 
-# --- 4. UI ---
+# --- 4. MAIN INTERFACE ---
 st.title("🥗 Sehat28")
 
 if not db.get("profile"):
-    st.subheader("👋 Setup Profile")
+    st.subheader("👋 Profile Setup")
     w = st.number_input("Weight (kg)", 40, 150, 70)
     h = st.number_input("Height (cm)", 120, 220, 170)
     a = st.number_input("Age", 15, 80, 25)
     g = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"])
-    if st.button("🚀 Start Challenge", use_container_width=True):
+    if st.button("🚀 Start My Challenge", use_container_width=True):
         bmr = (10*w + 6.25*h - 5*a + 5) * 1.2
         db["profile"] = {"w": w, "h": h, "a": a, "g": g, "target": int(bmr-500 if g=="Weight Loss" else bmr+500), "bmr": int(bmr)}
         save_data(db); st.rerun()
 else:
-    # Sidebar for Profile Edit
+    # Sidebar Profile Edit
     with st.sidebar:
-        st.header("⚙️ Settings")
+        st.header("⚙️ Profile Settings")
         p = db["profile"]
-        new_w = st.number_input("Update Weight", 40, 150, int(p["w"]))
-        new_h = st.number_input("Update Height", 120, 220, int(p["h"]))
+        new_w = st.number_input("Weight (kg)", 40, 150, int(p.get("w", 70)))
+        new_h = st.number_input("Height (cm)", 120, 220, int(p.get("h", 170)))
         if st.button("Update Profile"):
             new_bmr = (10*new_w + 6.25*new_h - 5*p["a"] + 5) * 1.2
-            db["profile"].update({"w": new_w, "h": new_h, "bmr": int(new_bmr), "target": int(new_bmr-500 if p["g"]=="Weight Loss" else new_bmr+500)})
+            p.update({"w": new_w, "h": new_h, "bmr": int(new_bmr), "target": int(new_bmr-500 if p["g"]=="Weight Loss" else new_bmr+500)})
             save_data(db); st.success("Updated!"); st.rerun()
 
     day_key = f"day_{db['current_day']}"
     if day_key not in db["history"]:
         db["history"][day_key] = {"cal": 0, "pro": 0, "carb": 0, "fat": 0, "vit": 0, "water": 0, "bad_items": 0}
+    
+    s = db["history"][day_key]
     
     st.subheader(f"🏆 Day {db['current_day']} / 28")
     
@@ -106,33 +115,33 @@ else:
         if query:
             res, items, bads = process_diet(query)
             if items:
-                hist = db["history"][day_key]
-                hist["cal"] += res[0]; hist["pro"] += res[1]; hist["carb"] += res[2]; hist["fat"] += res[3]; hist["vit"] += res[4]; hist["bad_items"] += bads
+                s["cal"] += res[0]; s["pro"] += res[1]; s["carb"] += res[2]; s["fat"] += res[3]; s["vit"] += res[4]; s["bad_items"] += bads
                 save_data(db); st.rerun()
 
     if st.button("💧 Add Water", use_container_width=True):
-        db["history"][day_key]["water"] += 1; save_data(db); st.rerun()
+        s["water"] += 1; save_data(db); st.rerun()
 
-    # --- LIVE TRACKING ---
-    s = db["history"][day_key]
+    # --- TRACKING DISPLAY ---
+    st.divider()
     impact = ((s['cal'] - db["profile"]["bmr"]) / 7700) * 1000
     
-    st.divider()
-    st.write(f"🔥 **Calories:** {s['cal']} / {db['profile']['target']}")
+    st.write(f"🔥 **Calories:** {s['cal']} / {db['profile']['target']} kcal")
     if impact < 0: st.success(f"📉 Losing {abs(round(impact, 1))}g today")
     else: st.warning(f"📈 Gaining {round(impact, 1)}g today")
     
-    # Red Flags
-    if s['bad_items'] > 0: st.error("🚩 Junk food alert! Parhez karein.")
+    if s.get("bad_items", 0) > 0:
+        st.error("🚩 **Red Flag:** Junk food detected! Avoid for better results.")
     
-    # Dr. Advice
-    st.info(f"🩺 **Dr. Advice:** {'Excellent routine!' if s['bad_items']==0 else 'Avoid fried food for better results.'}")
+    st.info(f"🩺 **Dr. Advice:** {'Everything looks great!' if s.get('bad_items', 0) == 0 else 'Try to replace fried food with grilled or fresh items.'}")
     
     st.divider()
+    st.write(f"💪 **Pro:** {s['pro']}g | 🥖 **Carb:** {s['carb']}g | 🥑 **Fat:** {s['fat']}g | 💧 **Water:** {s['water']}/12")
+
     if st.button("🏁 Finish Day", use_container_width=True):
         db["current_day"] += 1; save_data(db); st.balloons(); st.rerun()
 
-    with st.expander("Reset App"):
-        if st.button("Delete All Data"):
+    # Reset option agar boht hi bura phans jaye
+    with st.expander("Reset"):
+        if st.button("Delete Everything & Fresh Start"):
             if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
             st.rerun()
