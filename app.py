@@ -5,7 +5,7 @@ import json
 import os
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="Sehat28", page_icon="🥗", layout="centered")
+st.set_page_config(page_title="Sehat28 Pro", page_icon="🥗", layout="centered")
 
 DATA_FILE = "sehat28_master_data.json"
 
@@ -29,82 +29,92 @@ if 'app_data' not in st.session_state:
 
 db = st.session_state.app_data
 
-# --- 3. UPDATED DESI DICTIONARY ---
+# --- 3. DICTIONARY (Good/Bad/Heavy) ---
 master_food_db = {
-    "Roti/Chapati": {"tags": ["roti", "chapati", "phulka", "nan", "naan", "khamiri"], "vals": [110, 3, 22, 1, 2]},
-    "Paratha": {"tags": ["paratha", "pratha", "porota", "aloo paratha"], "vals": [290, 6, 35, 14, 1]},
-    "Rice/Biryani": {"tags": ["rice", "chawal", "biryani", "pulao", "palao", "mandi"], "vals": [400, 12, 55, 15, 2]},
-    "Salad/Sabzi": {"tags": ["sabzi", "tarkari", "salad", "palak", "gobi", "bhindi", "tinda", "saag", "aloo gajar"], "vals": [120, 4, 15, 2, 12]},
-    "Daal/Lentils": {"tags": ["daal", "dal", "haleem", "dhal", "chana", "lobia"], "vals": [180, 10, 25, 4, 5]},
-    "Chicken/Meat": {"tags": ["chicken", "murghi", "meat", "beef", "mutton", "tikka", "karahi", "korma", "kebab", "kabab"], "vals": [300, 25, 2, 18, 3]},
-    "Egg/Anda": {"tags": ["egg", "anda", "omlet", "omelette", "boiled egg"], "vals": [78, 7, 1, 5, 4]},
-    "Chai/Tea": {"tags": ["chai", "tea", "doodh patti", "kawa", "kahwa"], "vals": [90, 2, 12, 4, 1]},
-    "Samosa/Snacks": {"tags": ["samosa", "pakora", "shami", "roll", "chaat", "gol gappa", "pani puri"], "vals": [250, 4, 25, 16, 0]},
-    "Fruits": {"tags": ["fruit", "apple", "kela", "banana", "aam", "mango", "amrood", "guava", "malta", "orange"], "vals": [90, 1, 23, 0, 10]},
-    "Milk/Doodh": {"tags": ["milk", "doodh", "lassi", "yogurt", "dahi"], "vals": [150, 8, 12, 8, 8]},
-    "Fish": {"tags": ["fish", "machli", "machli fry"], "vals": [200, 22, 0, 10, 6]}
+    "Roti/Chapati": {"tags": ["roti", "chapati", "phulka", "nan", "naan"], "vals": [110, 3, 22, 1, 2], "type": "good"},
+    "Paratha": {"tags": ["paratha", "pratha", "porota"], "vals": [290, 6, 35, 14, 1], "type": "heavy"},
+    "Rice/Biryani": {"tags": ["rice", "chawal", "biryani", "pulao"], "vals": [400, 12, 55, 15, 2], "type": "heavy"},
+    "Salad/Sabzi": {"tags": ["sabzi", "tarkari", "salad", "palak", "bhindi"], "vals": [120, 4, 15, 2, 12], "type": "good"},
+    "Daal/Lentils": {"tags": ["daal", "dal", "haleem", "chana"], "vals": [180, 10, 25, 4, 5], "type": "good"},
+    "Chicken/Meat": {"tags": ["chicken", "murghi", "meat", "beef", "mutton", "tikka"], "vals": [300, 25, 2, 18, 3], "type": "good"},
+    "Egg/Anda": {"tags": ["egg", "anda", "omlet"], "vals": [78, 7, 1, 5, 4], "type": "good"},
+    "Chai/Tea": {"tags": ["chai", "tea", "doodh patti"], "vals": [90, 2, 12, 4, 1], "type": "neutral"},
+    "Samosa/Snacks": {"tags": ["samosa", "pakora", "shami", "roll", "junk", "burger", "pizza"], "vals": [350, 5, 40, 25, 0], "type": "bad"},
+    "Fruits": {"tags": ["fruit", "apple", "kela", "banana", "aam"], "vals": [90, 1, 23, 0, 10], "type": "good"},
+    "Milk/Doodh": {"tags": ["milk", "doodh", "yogurt"], "vals": [150, 8, 12, 8, 8], "type": "good"}
 }
 
-# --- 4. ENGINE ---
+# --- 4. LOGIC ---
 def process_diet(text):
     total = [0, 0, 0, 0, 0]
     items_added = []
+    bad_count = 0
     text = text.lower()
     for name, info in master_food_db.items():
         for tag in info["tags"]:
             if tag in text:
                 match = re.search(rf'(\d+)\s*{tag}|{tag}\s*(\d+)', text)
                 qty = int(match.group(1) or match.group(2)) if match else 1
-                for i in range(5):
-                    total[i] += info["vals"][i] * qty
+                for i in range(5): total[i] += info["vals"][i] * qty
                 items_added.append(f"{qty} {name}")
+                if info["type"] == "bad": bad_count += qty
                 break
-    return total, items_added
+    return total, items_added, bad_count
 
-# --- 5. MAIN UI ---
-st.title("🥗 Sehat28")
+# --- 5. UI ---
+st.title("🥗 Sehat28 Pro")
 
+# --- PROFILE SECTION (With Edit Feature) ---
 if not db.get("profile"):
-    st.subheader("👋 Setup Profile")
-    c1, c2 = st.columns(2)
-    with c1:
-        w = st.number_input("Weight (kg)", 40, 150, 70)
-        h = st.number_input("Height (cm)", 120, 220, 170)
-    with c2:
-        a = st.number_input("Age", 15, 80, 25)
-        g = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"])
+    st.subheader("👋 Setup Your Profile")
+    w = st.number_input("Weight (kg)", 40, 150, 70)
+    h = st.number_input("Height (cm)", 120, 220, 170)
+    a = st.number_input("Age", 15, 80, 25)
+    g = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"])
     
-    if st.button("🚀 Start 28-Day Challenge", use_container_width=True):
-        target = (10*w + 6.25*h - 5*a + 5) * 1.2
-        db["profile"] = {"target": int(target-500 if g=="Weight Loss" else target+500), "goal": g}
+    if st.button("🚀 Start Challenge", use_container_width=True):
+        bmr = (10*w + 6.25*h - 5*a + 5) * 1.2
+        db["profile"] = {"w": w, "h": h, "a": a, "g": g, "target": int(bmr-500 if g=="Weight Loss" else bmr+500), "bmr": int(bmr)}
         save_data(db)
         st.rerun()
 else:
+    # Sidebar or Expander for Editing Profile
+    with st.sidebar:
+        st.header("⚙️ Profile Settings")
+        curr = db["profile"]
+        new_w = st.number_input("Weight (kg)", 40, 150, int(curr["w"]))
+        new_h = st.number_input("Height (cm)", 120, 220, int(curr["h"]))
+        new_a = st.number_input("Age", 15, 80, int(curr["a"]))
+        new_g = st.selectbox("Goal", ["Weight Loss", "Muscle Gain"], index=0 if curr["g"]=="Weight Loss" else 1)
+        
+        if st.button("Update Profile"):
+            new_bmr = (10*new_w + 6.25*new_h - 5*new_a + 5) * 1.2
+            db["profile"] = {"w": new_w, "h": new_h, "a": new_a, "g": new_g, "target": int(new_bmr-500 if new_g=="Weight Loss" else new_bmr+500), "bmr": int(new_bmr)}
+            save_data(db)
+            st.success("Profile Updated!")
+            st.rerun()
+
     day = db["current_day"]
     day_key = f"day_{day}"
     if day_key not in db["history"]:
-        db["history"][day_key] = {"cal": 0, "pro": 0, "carb": 0, "fat": 0, "vit": 0, "water": 0}
+        db["history"][day_key] = {"cal": 0, "pro": 0, "carb": 0, "fat": 0, "vit": 0, "water": 0, "bad_items": 0}
 
     st.markdown(f"### 🏆 Day {day} / 28")
 
-    # --- INPUT SECTION ---
-    food_query = st.text_input("Aap ne kya khaya?", placeholder="e.g. 1 roti, 2 anda", key="food_box")
-    
-    # Chota aur simple button
+    # --- INPUT ---
+    food_query = st.text_input("Aap ne kya khaya?", placeholder="e.g. 2 roti, 1 anda")
     if st.button("➕ Add Meal", use_container_width=True, type="primary"):
         if food_query:
-            res, items = process_diet(food_query)
+            res, items, bads = process_diet(food_query)
             if items:
                 db["history"][day_key]["cal"] += res[0]
                 db["history"][day_key]["pro"] += res[1]
                 db["history"][day_key]["carb"] += res[2]
                 db["history"][day_key]["fat"] += res[3]
                 db["history"][day_key]["vit"] += res[4]
+                db["history"][day_key]["bad_items"] += bads
                 save_data(db)
-                st.toast(f"✅ Added: {', '.join(items)}")
                 st.rerun()
-            else:
-                st.error("Nahi mila. Try: roti, anda, chawal, etc.")
 
     if st.button("💧 Add Water", use_container_width=True):
         db["history"][day_key]["water"] += 1
@@ -113,32 +123,41 @@ else:
 
     st.divider()
 
-    # --- STATUS DISPLAY ---
+    # --- STATUS & CALCS ---
     s = db["history"][day_key]
-    t = db["profile"]["target"]
-    
-    st.write(f"🔥 **Calories:** {s['cal']} / {t} kcal")
-    st.progress(min(s['cal']/t, 1.0) if t > 0 else 0)
-    
-    st.write(f"💪 **Protein:** {s['pro']}g  |  🥖 **Carbs:** {s['carb']}g")
-    st.write(f"🥑 **Fats:** {s['fat']}g  |  ✨ **Vitamins:** {s['vit']} pts")
-    st.write(f"💧 **Water:** {s['water']} / 12 Glasses")
+    bmr = db["profile"]["bmr"]
+    weight_impact = ((s['cal'] - bmr) / 7700) * 1000
+
+    # 🚩 RED FLAGS
+    if s['bad_items'] > 1 or s['cal'] > db['profile']['target'] + 200 or (s['water'] < 3 and s['cal'] > 500):
+        st.error("### 🚩 RED FLAGS DETECTED!")
+        if s['bad_items'] > 1: st.write("- Junk food alert! Parhez karein.")
+        if s['cal'] > db['profile']['target']: st.write("- Calorie limit cross ho gayi hai.")
+        if s['water'] < 5: st.write("- Pani boht kam piya hai.")
+
+    # ⚖️ WEIGHT IMPACT
+    st.write(f"🔥 **Calories:** {s['cal']} / {db['profile']['target']}")
+    if weight_impact < 0:
+        st.success(f"📉 Losing **{abs(round(weight_impact, 1))}g** today.")
+    else:
+        st.warning(f"📈 Gaining **{round(weight_impact, 1)}g** today.")
 
     st.divider()
+    
+    # 🩺 DR. ADVICE
+    st.subheader("🩺 Doctor's Advice")
+    if s['vit'] < 5: st.info("Advice: Vitamins barhane ke liye sabzi ya phal khayein.")
+    elif s['pro'] < 40: st.info("Advice: Protein ki kami hai, anda ya daal shamil karein.")
+    elif s['bad_items'] > 0: st.warning("Advice: Junk food cholesterol barhata hai, dhiyaan dein.")
+    else: st.success("Advice: Excellent! Aapki diet bilkul sahi hai.")
+
+    st.divider()
+    st.write(f"💪 **Pro:** {s['pro']}g | 🥖 **Carb:** {s['carb']}g | 🥑 **Fat:** {s['fat']}g")
+    st.write(f"💧 **Water:** {s['water']} / 12 Glasses")
 
     if st.button("🏁 Finish Day", use_container_width=True):
-        if day < 28:
-            db["current_day"] += 1
-            save_data(db)
-            st.balloons()
-            st.rerun()
+        db["current_day"] += 1
+        save_data(db)
+        st.balloons(); st.rerun()
 
-    with st.expander("📜 History & Settings"):
-        if db["history"]:
-            st.table(pd.DataFrame.from_dict(db['history'], orient='index'))
-        if st.button("Reset Everything"):
-            if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
-            st.session_state.app_data = {"profile": {}, "current_day": 1, "history": {}}
-            st.rerun()
-
-st.markdown("<p style='text-align: center; color: #888; font-size: 0.8em;'>Developed by Abbas Ali | Sehat28 V1.0 Stable</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #888;'>Sehat28 | Developed by Abbas Ali</p>", unsafe_allow_html=True)
